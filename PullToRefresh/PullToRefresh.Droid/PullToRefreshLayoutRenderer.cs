@@ -355,6 +355,8 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
+            this.Tracker?.Dispose();
+            this.Tracker = null;
 
             /*if (disposing)
             {
