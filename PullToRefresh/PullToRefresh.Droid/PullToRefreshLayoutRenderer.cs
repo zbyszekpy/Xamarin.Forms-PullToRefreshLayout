@@ -35,10 +35,10 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         IVisualElementRenderer,
         SwipeRefreshLayout.IOnRefreshListener
     {
-        /// <summary>
-        /// Used for registration with dependency service
-        /// </summary>
-        public async static void Init()
+		/// <summary>
+		/// Used for registration with dependency service
+		/// </summary>
+		public async static void Init()
         {
             var temp = DateTime.Now;
         }
@@ -47,10 +47,10 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         /// Initializes a new instance of the
         /// <see cref="Refractored.XamForms.PullToRefresh.Droid.PullToRefreshLayoutRenderer"/> class.
         /// </summary>
-        public PullToRefreshLayoutRenderer()
-            : base(Forms.Context)
+        public PullToRefreshLayoutRenderer(Android.Content.Context context)
+            : base(context)
         {
-            
+            touchSlop = ViewConfiguration.Get(context).ScaledTouchSlop;
         }
 
         /// <summary>
@@ -92,6 +92,7 @@ namespace Refractored.XamForms.PullToRefresh.Droid
             UpdateColors();
             UpdateIsRefreshing();
             UpdateIsSwipeToRefreshEnabled();
+            UpdateIsInterceptHorizontalScroll();
 
             if (ElementChanged != null)
                 ElementChanged(this, new VisualElementChangedEventArgs(oldElement, this.Element));
@@ -108,7 +109,7 @@ namespace Refractored.XamForms.PullToRefresh.Droid
             if (packed != null)
                 RemoveView(packed.View);
 
-            packed = Platform.CreateRenderer(RefreshView.Content);
+			packed = Platform.CreateRendererWithContext(RefreshView.Content, Context);
 
             try
             {
@@ -272,7 +273,7 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         /// </summary>
         /// <value>The refresh view.</value>
         public Refractored.XamForms.PullToRefresh.PullToRefreshLayout RefreshView =>
-            Element == null ? null : (PullToRefreshLayout)Element;
+			Element as PullToRefreshLayout;
 
         /// <summary>
         /// The refresh view has been refreshed
@@ -294,7 +295,9 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         /// <param name="e">E.</param>
         void HandlePropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == "Content")
+			if (isDisposed)
+				return;
+			if (e.PropertyName == "Content")
                 UpdateContent();
             else if (e.PropertyName == PullToRefreshLayout.IsPullToRefreshEnabledProperty.PropertyName)
                 UpdateIsSwipeToRefreshEnabled();
@@ -304,6 +307,8 @@ namespace Refractored.XamForms.PullToRefresh.Droid
                 UpdateColors();
             else if (e.PropertyName == PullToRefreshLayout.RefreshBackgroundColorProperty.PropertyName)
                 UpdateColors();
+            else if (e.PropertyName == PullToRefreshLayout.IsInterceptHorizontalScrollProperty.PropertyName)
+                UpdateIsInterceptHorizontalScroll();
         }
 
         /// <summary>
@@ -348,6 +353,7 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         /// <value>The element.</value>
         public VisualElement Element { get; private set; }
 
+		bool isDisposed = false;
         /// <summary>
         /// Cleanup layout.
         /// </summary>
@@ -355,32 +361,67 @@ namespace Refractored.XamForms.PullToRefresh.Droid
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
-            this.Tracker?.Dispose();
-            this.Tracker = null;
+			isDisposed = true;
 
-            /*if (disposing)
+			if (disposing)
+			{
+				if (Element != null)
+				{
+					Element.PropertyChanged -= HandlePropertyChanged;
+				}
+
+				if (packed != null)
+					RemoveView(packed.View);
+			}
+
+			packed?.Dispose();
+			packed = null;
+
+			Tracker?.Dispose();
+			Tracker = null;
+
+
+			if (rendererProperty != null)
+			{
+				rendererProperty = null;
+			}
+			init = false;
+		}
+
+        void UpdateIsInterceptHorizontalScroll()
+        {
+            if (RefreshView == null)
+                return;
+
+            isInterceptHorizontalScroll = RefreshView.IsInterceptHorizontalScroll;
+        }
+
+        private bool isInterceptHorizontalScroll;
+        private int touchSlop;
+        private float previousX;
+        public override bool OnInterceptTouchEvent(MotionEvent ev)
+        {
+            if (isInterceptHorizontalScroll)
+                return base.OnInterceptTouchEvent(ev);
+
+            switch (ev.Action)
             {
-                if (Element != null)
-                {
-                    Element.PropertyChanged -= HandlePropertyChanged;
-                }
+                case MotionEventActions.Down:
+                    previousX = MotionEvent.Obtain(ev).GetX();
+                    break;
 
-                if (packed != null)
-                    RemoveView(packed.ViewGroup);
+                case MotionEventActions.Move:
+                    float eventX = ev.GetX();
+                    float xDiff = Math.Abs(eventX - previousX);
+
+                    if (xDiff > touchSlop)
+                    {
+                        return false;
+                    }
+                    break;
             }
 
-            packed?.Dispose();
-            packed = null;
-
-            Tracker?.Dispose();
-            Tracker = null;
-            
-
-            if (rendererProperty != null)
-            {
-                rendererProperty = null;
-            }
-            init = false;*/
+            return base.OnInterceptTouchEvent(ev);
         }
 
         public void SetLabelFor(int? id)
